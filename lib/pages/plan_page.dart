@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../data/app_store.dart';
 import '../models/exercise_item.dart';
 import '../utils/dates.dart';
+import '../utils/plan_text.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/exercise_editor_sheet.dart';
 import '../widgets/exercise_tile.dart';
@@ -139,7 +141,21 @@ class _PlanPageState extends State<PlanPage> {
     final items = store.planFor(_weekday);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('周计划')),
+      appBar: AppBar(
+        title: const Text('周计划'),
+        actions: <Widget>[
+          IconButton(
+            tooltip: '从剪贴板导入',
+            onPressed: _importFromClipboard,
+            icon: const Icon(Icons.content_paste),
+          ),
+          IconButton(
+            tooltip: '复制到剪贴板',
+            onPressed: _exportToClipboard,
+            icon: const Icon(Icons.content_copy),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'fab-plan',
         onPressed: _addItem,
@@ -242,6 +258,182 @@ class _PlanPageState extends State<PlanPage> {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _exportToClipboard() async {
+    final store = context.read<AppStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    if (store.plan.totalItems == 0) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('周计划还是空的，先加几个动作再导出')),
+      );
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: encodePlanText(store.plan)));
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '已复制周计划：${store.plan.totalItems} 个动作、'
+          '${store.plan.trainingDayCount} 天，发给别人就能导入',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _importFromClipboard() async {
+    final store = context.read<AppStore>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text ?? '';
+    if (text.trim().isEmpty) {
+      messenger.showSnackBar(const SnackBar(content: Text('剪贴板里没有文字')));
+      return;
+    }
+    if (!mounted) return;
+
+    final result = decodePlanText(text);
+    final action = await showDialog<_ImportAction>(
+      context: context,
+      builder: (dialogContext) => _ImportPreviewDialog(result: result),
+    );
+    if (action == null || !mounted) return;
+
+    await store.applyImportedPlan(
+      result.days,
+      replace: action == _ImportAction.replace,
+    );
+    if (!mounted) return;
+
+    final ok = result.unreadable.isEmpty
+        ? ''
+        : '，跳过 ${result.unreadable.length} 行认不出的';
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          action == _ImportAction.replace
+              ? '已用导入内容替换周计划：${result.itemCount} 个动作$ok'
+              : '已追加 ${result.itemCount} 个动作$ok',
+        ),
+      ),
+    );
+  }
+}
+
+enum _ImportAction { append, replace }
+
+/// 导入前的预览：让人先看清楚会进来什么、有哪些被降级或跳过，再决定怎么合。
+class _ImportPreviewDialog extends StatelessWidget {
+  const _ImportPreviewDialog({required this.result});
+
+  final PlanImportResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    if (result.isEmpty) {
+      return AlertDialog(
+        title: const Text('没解析出训练动作'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Text('剪贴板里没有找到「动作 3×8」这样的行。'),
+              if (result.unreadable.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 12),
+                Text('认不出来的行：', style: theme.textTheme.labelMedium),
+                for (final line in result.unreadable.take(6))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text('· $line', style: theme.textTheme.bodySmall),
+                  ),
+              ],
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('知道了'),
+          ),
+        ],
+      );
+    }
+
+    return AlertDialog(
+      title: const Text('导入预览'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text('共 ${result.itemCount} 个动作', style: theme.textTheme.bodyMedium),
+            const SizedBox(height: 6),
+            for (final weekday in result.filledWeekdays)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  '${weekdayName(weekday)} · ${result.days[weekday]!.length} 个动作',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ),
+            if (result.degraded > 0) ...<Widget>[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: scheme.tertiaryContainer.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '其中 ${result.degraded} 个是次数区间或计时（如 8-10 次、45 秒）。'
+                  '当前版本每个动作只存一个次数，会按下限记录，'
+                  '区间原文写进备注，信息不会丢。',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+            ],
+            if (result.unreadable.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 12),
+              Text(
+                '有 ${result.unreadable.length} 行认不出来，会被跳过：',
+                style: theme.textTheme.bodySmall?.copyWith(color: scheme.error),
+              ),
+              for (final line in result.unreadable.take(5))
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text('· $line', style: theme.textTheme.labelSmall),
+                ),
+            ],
+            const SizedBox(height: 14),
+            Text(
+              '追加 —— 保留现有计划，把导入的动作加在对应星期后面。\n'
+              '替换 —— 清空整份周计划，只留导入的内容。',
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, _ImportAction.append),
+          child: const Text('追加'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _ImportAction.replace),
+          child: const Text('替换'),
+        ),
+      ],
     );
   }
 }

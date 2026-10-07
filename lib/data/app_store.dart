@@ -92,6 +92,27 @@ class AppStore extends ChangeNotifier {
     return _updatePlan(_plan.copyWithDay(toWeekday, copies));
   }
 
+  /// 把从剪贴板导入的计划并进周计划。
+  ///
+  /// [replace] 为 true 时整份替换（导入内容里没有的星期会被清空），
+  /// 否则追加到对应星期后面，适合「别人的计划里只有周五，我加到自己周五」这种用法。
+  Future<void> applyImportedPlan(
+    Map<int, List<ExerciseItem>> days, {
+    required bool replace,
+  }) {
+    var next = replace ? WeeklyPlan() : _plan;
+    for (final entry in days.entries) {
+      if (entry.value.isEmpty) continue;
+      final existing =
+          replace ? const <ExerciseItem>[] : next.itemsFor(entry.key);
+      next = next.copyWithDay(
+        entry.key,
+        <ExerciseItem>[...existing, ...entry.value],
+      );
+    }
+    return _updatePlan(next);
+  }
+
   Future<void> _updatePlan(WeeklyPlan next) async {
     final changedWeekdays = _changedWeekdays(_plan, next);
     _plan = next;
