@@ -16,15 +16,51 @@ class TodayPage extends StatefulWidget {
   State<TodayPage> createState() => _TodayPageState();
 }
 
-class _TodayPageState extends State<TodayPage> {
+class _TodayPageState extends State<TodayPage> with WidgetsBindingObserver {
   DateTime _date = today();
 
-  bool get _isToday => isSameDay(_date, DateTime.now());
+  /// 页面是不是「跟着今天走」。
+  ///
+  /// 用前后箭头翻到别的日期后就不再跟了：这时即使跨了天，也该停在用户
+  /// 正在看的那一天，不能把他眼前的记录顶掉。
+  bool _pinnedToToday = true;
+
+  bool get _isToday => isSameDay(_date, today());
 
   /// 过去的日期不套用周计划，只有真正记录过才有清单。
   bool get _isPast => _date.isBefore(today());
 
-  void _shiftDay(int days) => setState(() => _date = addDays(_date, days));
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    // App 在后台过了夜再回来时，_date 还停在昨天，这里把它拉回今天。
+    // 顺带 setState 一次，让「今天 / 昨天」这类相对日期描述也刷新。
+    setState(() {
+      if (_pinnedToToday) _date = today();
+    });
+  }
+
+  void _shiftDay(int days) => setState(() {
+        _date = addDays(_date, days);
+        _pinnedToToday = isSameDay(_date, today());
+      });
+
+  void _backToToday() => setState(() {
+        _date = today();
+        _pinnedToToday = true;
+      });
 
   Future<void> _addItem() async {
     final result = await showExerciseEditor(
@@ -218,7 +254,7 @@ class _TodayPageState extends State<TodayPage> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: TextButton.icon(
-                  onPressed: () => setState(() => _date = today()),
+                  onPressed: _backToToday,
                   icon: const Icon(Icons.today, size: 18),
                   label: const Text('回到今天'),
                 ),

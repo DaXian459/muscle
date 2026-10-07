@@ -15,7 +15,17 @@ String weekdayName(int weekday) => kWeekdayNames[(weekday - 1).clamp(0, 6)];
 /// 把任意时间点抹成当天零点，方便做“按天”比较。
 DateTime dateOnly(DateTime value) => DateTime(value.year, value.month, value.day);
 
-DateTime today() => dateOnly(DateTime.now());
+/// 仅测试用：把「现在」固定成某个时间点。
+///
+/// 跨天刷新的逻辑必须能验证（后台过夜再回来要跳到新的一天），
+/// 而真实时钟没法在测试里拨动，所以留这个入口。
+/// 测试结束务必置回 null。
+DateTime? debugNowOverride;
+
+/// 当前时间，测试里可被 [debugNowOverride] 替换。
+DateTime currentTime() => debugNowOverride ?? DateTime.now();
+
+DateTime today() => dateOnly(currentTime());
 
 /// 用 [DateTime] 自带的字段溢出规则做加法，天然避开夏令时带来的 23/25 小时问题。
 DateTime addDays(DateTime value, int days) =>
