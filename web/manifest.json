@@ -5,7 +5,7 @@
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "每天健身器械使用记录：按周安排训练计划，练完打勾，训练历史自动留存。",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
