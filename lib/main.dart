@@ -4,11 +4,13 @@ import 'package:provider/provider.dart';
 
 import 'data/app_repository.dart';
 import 'data/app_store.dart';
+import 'legal/third_party_licenses.dart';
 import 'pages/home_page.dart';
 import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerThirdPartyLicenses();
   final repository = await AppRepository.open();
   runApp(MuscleApp(store: AppStore(repository)));
 }

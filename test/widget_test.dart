@@ -140,6 +140,93 @@ void main() {
     expect(find.text('已完成 0 / 1 台器械'), findsOneWidget);
   });
 
+  testWidgets('后台过夜再回来，今日训练会跳到新的一天', (WidgetTester tester) async {
+    usePhoneSize(tester);
+    final store = await buildStore();
+    debugNowOverride = DateTime(2026, 10, 7, 23, 50);
+    addTearDown(() => debugNowOverride = null);
+
+    await tester.pumpWidget(MuscleApp(store: store));
+    await tester.pumpAndSettle();
+    expect(find.text('2026年10月7日'), findsOneWidget);
+
+    // App 在后台过了夜，再回到前台
+    debugNowOverride = DateTime(2026, 10, 8, 8, 0);
+    // 模拟系统广播的生命周期事件；测试里需要直接触发这个受保护方法
+    // ignore: invalid_use_of_protected_member
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(find.text('2026年10月8日'), findsOneWidget);
+    expect(find.text('2026年10月7日'), findsNothing);
+  });
+
+  testWidgets('正在翻看历史日期时跨天，不会顶掉他在看的那一天', (WidgetTester tester) async {
+    usePhoneSize(tester);
+    final store = await buildStore();
+    debugNowOverride = DateTime(2026, 10, 7, 23, 50);
+    addTearDown(() => debugNowOverride = null);
+
+    await tester.pumpWidget(MuscleApp(store: store));
+    await tester.pumpAndSettle();
+
+    // 用户主动往前翻一天
+    await tester.tap(find.byIcon(Icons.chevron_left));
+    await tester.pumpAndSettle();
+    expect(find.text('2026年10月6日'), findsOneWidget);
+
+    debugNowOverride = DateTime(2026, 10, 8, 8, 0);
+    // ignore: invalid_use_of_protected_member
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    // 仍停在用户翻到的那天
+    expect(find.text('2026年10月6日'), findsOneWidget);
+  });
+
+  testWidgets('历史页可以进入关于页并打开开源许可', (WidgetTester tester) async {
+    usePhoneSize(tester);
+    final store = await buildStore();
+    await tester.pumpWidget(MuscleApp(store: store));
+    await tester.pumpAndSettle();
+
+    await goToTab(tester, '历史记录');
+    await tester.tap(find.byIcon(Icons.info_outline));
+    await tester.pumpAndSettle();
+
+    expect(find.text('关于'), findsOneWidget);
+    expect(find.text('开源许可'), findsOneWidget);
+    expect(find.textContaining('1.0.0'), findsWidgets);
+
+    await tester.tap(find.text('开源许可'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LicensePage), findsOneWidget);
+  });
+
+  testWidgets('历史记录按月份分组，并显示每月条数', (WidgetTester tester) async {
+    usePhoneSize(tester);
+    final store = await buildStore();
+    // 跨两个月各记两天
+    for (final date in <DateTime>[
+      DateTime(2026, 9, 28),
+      DateTime(2026, 9, 30),
+      DateTime(2026, 10, 5),
+    ]) {
+      await store.addSessionItem(
+        date,
+        ExerciseItem(id: dateKey(date), name: '器械'),
+      );
+      await store.toggleItem(date, dateKey(date));
+    }
+
+    await tester.pumpWidget(MuscleApp(store: store));
+    await tester.pumpAndSettle();
+    await goToTab(tester, '历史记录');
+
+    expect(find.text('2026年10月 · 共 1 次'), findsOneWidget);
+    expect(find.text('2026年9月 · 共 2 次'), findsOneWidget);
+  });
+
   testWidgets('今日训练里可以直接添加器械并取消打卡', (WidgetTester tester) async {
     usePhoneSize(tester);
     final store = await buildStore();

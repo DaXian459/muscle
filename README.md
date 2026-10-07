@@ -86,7 +86,8 @@ flutter config --jdk-dir="F:\env\jdk17"
 
 ## 应用图标
 
-- 图形：`mdi:arm-flex`（屈臂肌肉），来自 **Material Design Icons**，Apache-2.0，可商用。
+- 图形：`mdi:arm-flex`（屈臂肌肉），来自 **Material Design Icons**（作者 Pictogrammers），
+  **Apache License 2.0** —— 可商用，但**必须保留署名并附带许可副本**。
 - 底色：`#0E9F6E`，与 App 内主题色一致。
 
 资源位置：
@@ -97,10 +98,21 @@ flutter config --jdk-dir="F:\env\jdk17"
 | `android/app/src/main/res/drawable/ic_launcher_foreground.xml` | 矢量前景（字形占 108dp 画布的 52%，留在安全区内） |
 | `android/app/src/main/res/values/colors.xml` | 背景色 `ic_launcher_background` |
 | `android/app/src/main/res/mipmap-*/ic_launcher.png` | 48 / 72 / 96 / 144 / 192 的传统图标，给 Android 7 及以下 |
-| `web/icons/*`、`web/favicon.png` | Web 端图标 |
+| `android/app/src/main/res/mipmap-*/ic_launcher_round.png` | 同尺寸的圆形版本，供声明 `roundIcon` 的启动器使用 |
+| `ios/Runner/Assets.xcassets/AppIcon.appiconset/` | iOS 全套 15 个尺寸（铺满方形、无透明通道，iOS 自己裁形状） |
+| `web/icons/*`、`web/favicon.png` | Web 端图标（含 maskable 版本） |
 
 Android 8 以上走矢量自适应图标，任何分辨率都不糊；换图标只需替换
 `ic_launcher_foreground.xml` 里的 `pathData` 和 `colors.xml` 里的颜色。
+
+### 开源许可（重要）
+
+Flutter 只会自动收集 **pub 依赖**的许可并打进 `NOTICES`，手工放进 `res/` 与 `web/`
+的图标**不在**自动收集范围内。因此图标的署名与许可正文写在了
+`lib/legal/third_party_licenses.dart`，在 `main()` 里通过 `LicenseRegistry` 登记，
+用户可在「历史记录 → 右上角 ⓘ → 开源许可」里查看。
+
+改图标时如果换了别的图标集，**记得同步改这里**，否则会丢掉署名。
 
 ## 代码结构
 
