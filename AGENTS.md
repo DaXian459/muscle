@@ -22,21 +22,20 @@
 
 ### 需要推送时
 
-远端：`https://github.com/DaXian459/muscle.git`（公开）。本仓库已单独为 github.com
-配好代理（`http.https://github.com/.proxy` → `http://127.0.0.1:7897`），因为本机直连
-GitHub 要 12 秒且经常超时；这条配置只作用于本仓库，没有动全局设置。
+远端：`https://github.com/DaXian459/muscle.git`（公开）。
 
-## 先看 README 再动构建配置
+本地 git 配置里已为 github.com 设了代理（直连约 12 秒且经常超时）。这条配置只作用于
+本仓库、不在版本控制里，换台机器需要重新配。
 
-有几处是为适配本机环境才这么写的，**不是通用做法**，换环境可能要还原：
+## 构建配置偏离 Flutter 默认模板的三处
 
-| 位置 | 原因 |
+仓库里这三处和 `flutter create` 的默认产物不同，**改动前先看清楚原因**：
+
+| 位置 | 为什么不同 |
 | --- | --- |
-| `android/settings.gradle.kts`、`android/build.gradle.kts` | 本机 `maven.google.com` 不可达，改用等价的 `dl.google.com` 镜像 |
-| `android/gradle.properties` 的 `kotlin.incremental=false` | Kotlin 2.4.0 的增量编译缓存在本机稳定报错 |
-| 没有 `windows/` 平台目录 | 为 Windows 插件建符号链接需要开发者模式 |
-
-详见 README「本机的 Android 构建环境」。
+| `android/settings.gradle.kts`、`android/build.gradle.kts` | 用 `dl.google.com/dl/android/maven2` 代替 `google()`。两者是同一份 Google Maven 仓库，只是 `maven.google.com` 在部分网络下不可达 |
+| `android/gradle.properties` 的 `kotlin.incremental=false` | 绕开 Kotlin 2.4.0 增量编译缓存的一个稳定报错（`Could not close incremental caches ... Storage ... is already registered`）。只影响编译速度，不影响产物，网络/工具链正常的机器上可以试着删掉 |
+| 没有 `windows/` 平台目录 | 为 Windows 插件建符号链接需要系统开发者模式。要做桌面版，先打开开发者模式再 `flutter create --platforms=windows .` |
 
 ## 数据行为：周计划只往前看
 
