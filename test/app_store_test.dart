@@ -6,6 +6,9 @@ import 'package:muscle/utils/dates.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 2026-10-07 是星期三。
+///
+/// 下面一半以上的用例都依赖「这一天是不是今天/过去/未来」，
+/// 所以整个文件把时钟钉死在这天的中午 —— 否则测试只在写它的那天能过。
 final DateTime kWednesday = DateTime(2026, 10, 7);
 
 Future<AppStore> buildStore() async {
@@ -15,6 +18,10 @@ Future<AppStore> buildStore() async {
 }
 
 void main() {
+  // 把「现在」钉在 kWednesday 中午：今天 / 过去 / 未来的判定才是确定的
+  setUp(() => debugNowOverride = DateTime(2026, 10, 7, 12));
+  tearDown(() => debugNowOverride = null);
+
   test('全新安装时既没有计划也没有记录', () async {
     final store = await buildStore();
     expect(store.history, isEmpty);

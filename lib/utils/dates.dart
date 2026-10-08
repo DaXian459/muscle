@@ -55,7 +55,7 @@ String formatShortDate(DateTime value) => '${value.month}/${value.day}';
 
 /// 相对今天的口语化描述：今天 / 昨天 / 前天 / 明天 / 后天，其余回退到星期。
 String describeDay(DateTime value, {DateTime? now}) {
-  final base = dateOnly(now ?? DateTime.now());
+  final base = dateOnly(now ?? currentTime());
   final diff = dateOnly(value).difference(base).inDays;
   switch (diff) {
     case -2:
