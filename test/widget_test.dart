@@ -341,4 +341,33 @@ void main() {
     expect(find.text('椭圆机'), findsOneWidget);
     expect(find.text('完成 1 / 2 台器械'), findsOneWidget);
   });
+
+  testWidgets('打卡够两次才显示训练时长，并出现在历史里', (WidgetTester tester) async {
+    usePhoneSize(tester);
+    final store = await buildStore();
+    debugNowOverride = DateTime(2026, 10, 7, 18, 30);
+    addTearDown(() => debugNowOverride = null);
+
+    await tester.pumpWidget(MuscleApp(store: store));
+    await tester.pumpAndSettle();
+
+    // 第一台：打完卡也只有一个时间点，不该显示时长
+    await addEquipment(tester, '腿举机');
+    await tester.tap(find.text('腿举机'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('本次训练'), findsNothing);
+
+    // 过了一个小时再练第二台
+    debugNowOverride = DateTime(2026, 10, 7, 19, 22);
+    await addEquipment(tester, '腿屈伸机');
+    await tester.tap(find.text('腿屈伸机'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('本次训练 约 52 分钟'), findsOneWidget);
+
+    // 历史卡片上也带上时长
+    await goToTab(tester, '历史记录');
+    expect(find.text('完成 2/2 台器械 · 约 52 分钟'), findsOneWidget);
+    expect(find.text('累计训练 52 分钟'), findsOneWidget);
+  });
 }

@@ -111,6 +111,16 @@ class SessionDetailPage extends StatelessWidget {
                       backgroundColor: scheme.surface.withValues(alpha: 0.7),
                     ),
                   ),
+                  if (record.duration != null) ...<Widget>[
+                    const SizedBox(height: 10),
+                    Text(
+                      '${formatClock(record.startedAt!)} – '
+                      '${formatClock(record.finishedAt!)} · '
+                      '约 ${formatDuration(record.duration!)}',
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                  ],
                 ],
               ),
             ),

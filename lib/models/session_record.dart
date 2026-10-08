@@ -1,5 +1,15 @@
 import 'exercise_item.dart';
 
+/// 时长写成人话：不到 1 分钟 / 52 分钟 / 1 小时 12 分钟。
+String formatDuration(Duration value) {
+  final minutes = value.inMinutes;
+  if (minutes < 1) return '不到 1 分钟';
+  if (minutes < 60) return '$minutes 分钟';
+  final hours = minutes ~/ 60;
+  final rest = minutes % 60;
+  return rest == 0 ? '$hours 小时' : '$hours 小时 $rest 分钟';
+}
+
 /// 训练记录中的一项器械：在计划内容之上叠加「是否已完成」。
 class SessionItem {
   const SessionItem({
@@ -73,6 +83,43 @@ class SessionRecord {
   int get completedCount => items.where((entry) => entry.completed).length;
   bool get allCompleted => items.isNotEmpty && completedCount == total;
   double get progress => items.isEmpty ? 0 : completedCount / total;
+
+  /// 这一天所有打卡时刻，已按时间排好序。
+  ///
+  /// 训练时长与起止时间都由它推出来 —— 不额外要求用户去按「开始 / 结束」，
+  /// 因为这个 App 的交互就是「练完一台点一下打勾」。
+  /// 代价是：如果攒到练完才统一打勾，算出来的时长会接近 0，所以界面上标「约」。
+  List<DateTime> get tickTimes {
+    final times = items
+        .map((entry) => entry.completedAt)
+        .whereType<String>()
+        .map(DateTime.tryParse)
+        .whereType<DateTime>()
+        .toList()
+      ..sort();
+    return times;
+  }
+
+  /// 第一次打卡的时刻。
+  DateTime? get startedAt {
+    final times = tickTimes;
+    return times.isEmpty ? null : times.first;
+  }
+
+  /// 最后一次打卡的时刻。只有一个打卡点时不给出（算不出跨度）。
+  DateTime? get finishedAt {
+    final times = tickTimes;
+    return times.length >= 2 ? times.last : null;
+  }
+
+  /// 本次训练时长。打卡不足两次、或时间没往前走时为 null，
+  /// 免得显示出一个「用时 0 分钟」误导人。
+  Duration? get duration {
+    final times = tickTimes;
+    if (times.length < 2) return null;
+    final span = times.last.difference(times.first);
+    return span > Duration.zero ? span : null;
+  }
 
   SessionRecord copyWith({List<SessionItem>? items}) =>
       SessionRecord(date: date, items: items ?? this.items);

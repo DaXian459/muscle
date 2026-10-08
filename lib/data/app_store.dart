@@ -212,7 +212,7 @@ class AppStore extends ChangeNotifier {
       final completed = !entry.completed;
       return entry.copyWith(
         completed: completed,
-        completedAt: completed ? DateTime.now().toIso8601String() : null,
+        completedAt: completed ? currentTime().toIso8601String() : null,
         clearCompletedAt: !completed,
       );
     }).toList();
@@ -222,7 +222,7 @@ class AppStore extends ChangeNotifier {
   /// 一键全选 / 取消全选。
   Future<void> setAllCompleted(DateTime date, bool completed) {
     final record = sessionFor(date);
-    final timestamp = completed ? DateTime.now().toIso8601String() : null;
+    final timestamp = completed ? currentTime().toIso8601String() : null;
     final items = record.items
         .map((entry) => entry.copyWith(
               completed: completed,
@@ -244,7 +244,7 @@ class AppStore extends ChangeNotifier {
       SessionItem(
         item: item,
         completed: completed,
-        completedAt: completed ? DateTime.now().toIso8601String() : null,
+        completedAt: completed ? currentTime().toIso8601String() : null,
         fromPlan: false,
       ),
     ];
@@ -319,6 +319,16 @@ class AppStore extends ChangeNotifier {
   /// 累计完成的器械次数。
   int get completedItemCount =>
       _sessions.values.fold(0, (sum, record) => sum + record.completedCount);
+
+  /// 所有训练日的时长之和。算不出时长的日子（只打了一次卡）不计入。
+  Duration get totalDuration {
+    var total = Duration.zero;
+    for (final record in _sessions.values) {
+      final span = record.duration;
+      if (span != null) total += span;
+    }
+    return total;
+  }
 
   /// 累计登记过的器械次数（含未完成）。
   int get loggedItemCount =>

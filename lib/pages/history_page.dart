@@ -80,6 +80,18 @@ class _HistoryPageState extends State<HistoryPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   _stats(theme, store),
+                  if (store.totalDuration > Duration.zero) ...<Widget>[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '累计训练 ${formatDuration(store.totalDuration)}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Align(
                     alignment: Alignment.centerLeft,
@@ -235,7 +247,11 @@ class _HistoryPageState extends State<HistoryPage> {
               ),
               const SizedBox(height: 10),
               Text(
-                '完成 ${record.completedCount}/${record.total} 台器械',
+                <String>[
+                  '完成 ${record.completedCount}/${record.total} 台器械',
+                  if (record.duration != null)
+                    '约 ${formatDuration(record.duration!)}',
+                ].join(' · '),
                 style: theme.textTheme.bodyMedium,
               ),
               if (completedNames.isNotEmpty) ...<Widget>[

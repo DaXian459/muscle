@@ -303,6 +303,24 @@ class _TodayPageState extends State<TodayPage> with WidgetsBindingObserver {
                 backgroundColor: scheme.surface.withValues(alpha: 0.7),
               ),
             ),
+            if (session.duration != null) ...<Widget>[
+              const SizedBox(height: 10),
+              Row(
+                children: <Widget>[
+                  Icon(
+                    Icons.schedule,
+                    size: 14,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '本次训练 约 ${formatDuration(session.duration!)}',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ],
             if (total > 0) ...<Widget>[
               const SizedBox(height: 8),
               Row(

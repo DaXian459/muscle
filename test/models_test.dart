@@ -163,4 +163,61 @@ void main() {
       expect(describeDay(DateTime(2026, 10, 4), now: now), '周日');
     });
   });
+
+  group('训练时长', () {
+    SessionRecord recordWith(List<String?> stamps) => SessionRecord(
+          date: '2026-10-07',
+          items: <SessionItem>[
+            for (var i = 0; i < stamps.length; i++)
+              SessionItem(
+                item: ExerciseItem(id: 'i$i', name: '动作$i'),
+                completed: stamps[i] != null,
+                completedAt: stamps[i],
+              ),
+          ],
+        );
+
+    test('打卡不足两次时算不出时长', () {
+      expect(recordWith(<String?>[]).duration, isNull);
+      expect(recordWith(<String?>[null, null]).duration, isNull);
+      // 只打了一次卡：一个点算不出跨度，不显示「用时 0 分钟」误导人
+      expect(recordWith(<String?>['2026-10-07T18:30:00']).duration, isNull);
+      expect(recordWith(<String?>['2026-10-07T18:30:00']).startedAt,
+          DateTime(2026, 10, 7, 18, 30));
+    });
+
+    test('用首尾打卡时间算时长，与录入先后无关', () {
+      final record = recordWith(<String?>[
+        '2026-10-07T19:22:00',
+        '2026-10-07T18:30:00',
+        '2026-10-07T18:55:00',
+      ]);
+      expect(record.duration, const Duration(minutes: 52));
+      expect(record.startedAt, DateTime(2026, 10, 7, 18, 30));
+      expect(record.finishedAt, DateTime(2026, 10, 7, 19, 22));
+    });
+
+    test('时间戳有问题时当作算不出来，而不是给出负数或 0', () {
+      expect(
+        recordWith(<String?>['2026-10-07T18:30:00', '2026-10-07T18:30:00']).duration,
+        isNull,
+      );
+      expect(
+        recordWith(<String?>['2026-10-07T19:00:00', '不是时间']).duration,
+        isNull,
+      );
+    });
+
+    test('时长文案', () {
+      expect(formatDuration(const Duration(seconds: 40)), '不到 1 分钟');
+      expect(formatDuration(const Duration(minutes: 1)), '1 分钟');
+      expect(formatDuration(const Duration(minutes: 52)), '52 分钟');
+      expect(formatDuration(const Duration(hours: 1)), '1 小时');
+      expect(
+        formatDuration(const Duration(hours: 1, minutes: 12)),
+        '1 小时 12 分钟',
+      );
+      expect(formatDuration(const Duration(hours: 2, minutes: 5)), '2 小时 5 分钟');
+    });
+  });
 }

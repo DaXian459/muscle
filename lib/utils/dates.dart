@@ -53,6 +53,11 @@ String formatMonth(DateTime value) => '${value.year}年${value.month}月';
 
 String formatShortDate(DateTime value) => '${value.month}/${value.day}';
 
+/// 只取时分，形如 `18:30`。训练起止时间这类只需要时刻的地方用它。
+String formatClock(DateTime value) =>
+    '${value.hour.toString().padLeft(2, '0')}:'
+    '${value.minute.toString().padLeft(2, '0')}';
+
 /// 相对今天的口语化描述：今天 / 昨天 / 前天 / 明天 / 后天，其余回退到星期。
 String describeDay(DateTime value, {DateTime? now}) {
   final base = dateOnly(now ?? currentTime());

@@ -405,4 +405,45 @@ void main() {
     // 模板还在，所以再次打开这一天仍能看到待办清单。
     expect(store.sessionFor(kWednesday).items, isEmpty);
   });
+
+  test('训练时长按首尾打卡推算，累计时长把它们加起来', () async {
+    final store = await buildStore();
+
+    debugNowOverride = DateTime(2026, 10, 7, 18, 30);
+    await store.addSessionItem(
+      kWednesday,
+      const ExerciseItem(id: 'a', name: 'A'),
+    );
+    await store.toggleItem(kWednesday, 'a');
+    // 只有一个打卡点，算不出时长
+    expect(store.sessionFor(kWednesday).duration, isNull);
+
+    debugNowOverride = DateTime(2026, 10, 7, 19, 22);
+    await store.addSessionItem(
+      kWednesday,
+      const ExerciseItem(id: 'b', name: 'B'),
+    );
+    await store.toggleItem(kWednesday, 'b');
+
+    expect(store.sessionFor(kWednesday).duration, const Duration(minutes: 52));
+    expect(store.totalDuration, const Duration(minutes: 52));
+
+    // 另一天再练一次，累计时长叠加
+    final nextDay = addDays(kWednesday, 1);
+    debugNowOverride = DateTime(2026, 10, 8, 9, 0);
+    await store.addSessionItem(
+      nextDay,
+      const ExerciseItem(id: 'c', name: 'C'),
+    );
+    await store.toggleItem(nextDay, 'c');
+    debugNowOverride = DateTime(2026, 10, 8, 9, 30);
+    await store.addSessionItem(
+      nextDay,
+      const ExerciseItem(id: 'd', name: 'D'),
+    );
+    await store.toggleItem(nextDay, 'd');
+
+    expect(store.sessionFor(nextDay).duration, const Duration(minutes: 30));
+    expect(store.totalDuration, const Duration(minutes: 82));
+  });
 }
