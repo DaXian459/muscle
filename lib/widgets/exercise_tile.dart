@@ -37,12 +37,16 @@ class ExerciseCheckTile extends StatelessWidget {
     required this.onToggle,
     this.onEdit,
     this.onDelete,
+    this.onWeightTap,
   });
 
   final SessionItem entry;
   final VoidCallback onToggle;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+
+  /// 点重量标签时回调。给了才显示标签。
+  final VoidCallback? onWeightTap;
 
   @override
   Widget build(BuildContext context) {
@@ -86,10 +90,24 @@ class ExerciseCheckTile extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      entry.summary,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: scheme.onSurfaceVariant),
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      children: <Widget>[
+                        Text(
+                          // 有重量标签时摘要就不再重复重量
+                          onWeightTap != null
+                              ? entry.setsAndReps
+                              : entry.summary,
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                        if (onWeightTap != null)
+                          _WeightChip(
+                            weight: entry.weight,
+                            onTap: onWeightTap!,
+                          ),
+                      ],
                     ),
                     if (entry.note.isNotEmpty) ...<Widget>[
                       const SizedBox(height: 2),
@@ -207,6 +225,58 @@ class PlanItemTile extends StatelessWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 清单项上的重量标签：已记重量就显示数值，没记就提示可以添。
+///
+/// 单独做成可点的小标签，是因为整行的点击已经是「打勾」了 ——
+/// 不能再把「改重量」挤进同一次点击里。
+class _WeightChip extends StatelessWidget {
+  const _WeightChip({required this.weight, required this.onTap});
+
+  final double? weight;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final load = weight;
+    final hasWeight = load != null && load > 0;
+    final color = hasWeight ? scheme.primary : scheme.onSurfaceVariant;
+
+    return Material(
+      color: hasWeight
+          ? scheme.primary.withValues(alpha: 0.12)
+          : scheme.surfaceContainerHighest.withValues(alpha: 0.7),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                hasWeight ? Icons.fitness_center : Icons.add,
+                size: 12,
+                color: color,
+              ),
+              const SizedBox(width: 3),
+              Text(
+                hasWeight ? '${formatWeight(load)} kg' : '重量',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

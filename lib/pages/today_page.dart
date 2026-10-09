@@ -7,6 +7,7 @@ import '../utils/dates.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/exercise_editor_sheet.dart';
 import '../widgets/exercise_tile.dart';
+import '../widgets/weight_editor.dart';
 
 /// 今日训练：查看某一天的器械清单并逐个打卡。
 class TodayPage extends StatefulWidget {
@@ -69,6 +70,62 @@ class _TodayPageState extends State<TodayPage> with WidgetsBindingObserver {
     );
     if (!mounted || result == null || result.item == null) return;
     await context.read<AppStore>().addSessionItem(_date, result.item!);
+  }
+
+  /// 全部完成 / 取消全选。
+  ///
+  /// 只有「取消」需要确认：它会把已经记下的打卡时间一并抹掉，
+  /// 而训练时长正是靠这些时间推出来的 —— 点错一下半天就白打了。
+  /// 「全部完成」是补齐，且随时可以再取消，不拦。
+  Future<void> _toggleAll(AppStore store, SessionRecord session) async {
+    final turnOn = !session.allCompleted;
+
+    if (!turnOn) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('取消全部打卡？'),
+          content: Text(
+            '「${formatFullDate(_date)}」已完成的 '
+            '${session.completedCount} 台器械会全部变回未完成，'
+            '打卡时间也会一起清掉，本次训练时长将不再显示。',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('再想想'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('取消全部打卡'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+
+    await store.setAllCompleted(_date, turnOn);
+  }
+
+  /// 记录这一天的配重。
+  ///
+  /// 只改当天的记录，不动周计划 —— 重量本来就是一天一个数，
+  /// 周计划里那个更像是「起始值」。
+  Future<void> _editWeight(SessionItem entry) async {
+    final store = context.read<AppStore>();
+    final text = await showWeightEditor(
+      context,
+      name: entry.name,
+      weight: entry.weight,
+    );
+    if (text == null || !mounted) return;
+
+    final value = parseWeightInput(text);
+    await store.updateSessionItem(
+      _date,
+      entry.item.copyWith(weight: value, clearWeight: value == null),
+    );
   }
 
   Future<void> _editItem(SessionItem entry) async {
@@ -204,6 +261,7 @@ class _TodayPageState extends State<TodayPage> with WidgetsBindingObserver {
                 onToggle: () => store.toggleItem(_date, entry.id),
                 onEdit: () => _editItem(entry),
                 onDelete: () => _removeItem(entry),
+                onWeightTap: () => _editWeight(entry),
               ),
           ],
         ],
@@ -333,10 +391,7 @@ class _TodayPageState extends State<TodayPage> with WidgetsBindingObserver {
                     ),
                   ),
                   TextButton(
-                    onPressed: () => store.setAllCompleted(
-                      _date,
-                      !session.allCompleted,
-                    ),
+                    onPressed: () => _toggleAll(store, session),
                     child: Text(session.allCompleted ? '取消全选' : '全部完成'),
                   ),
                 ],

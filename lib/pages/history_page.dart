@@ -200,9 +200,9 @@ class _HistoryPageState extends State<HistoryPage> {
 
   Widget _recordCard(ThemeData theme, SessionRecord record, DateTime date) {
     final scheme = theme.colorScheme;
-    final completedNames = record.items
+    final completedLabels = record.items
         .where((entry) => entry.completed)
-        .map((entry) => entry.name)
+        .map((entry) => entry.nameWithWeight)
         .toList();
 
     return Card(
@@ -254,13 +254,13 @@ class _HistoryPageState extends State<HistoryPage> {
                 ].join(' · '),
                 style: theme.textTheme.bodyMedium,
               ),
-              if (completedNames.isNotEmpty) ...<Widget>[
+              if (completedLabels.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 6,
                   runSpacing: 4,
                   children: <Widget>[
-                    for (final name in completedNames)
+                    for (final name in completedLabels)
                       StatusTag(text: name, color: scheme.primary),
                   ],
                 ),

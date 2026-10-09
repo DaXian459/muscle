@@ -52,14 +52,16 @@ class ExerciseItem {
     );
   }
 
+  /// 「3 组 × 12 次」，不含重量。
+  ///
+  /// 清单项自己带重量标签时用它，免得「· 20 kg」和标签上的 20 kg 说两遍。
+  String get setsAndReps => '$sets 组 × $reps 次';
+
   /// 例如「4 组 × 10 次 · 60 kg」。
   String get summary {
-    final buffer = StringBuffer('$sets 组 × $reps 次');
     final load = weight;
-    if (load != null && load > 0) {
-      buffer.write(' · ${formatWeight(load)} kg');
-    }
-    return buffer.toString();
+    if (load == null || load <= 0) return setsAndReps;
+    return '$setsAndReps · ${formatWeight(load)} kg';
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{

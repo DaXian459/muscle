@@ -264,6 +264,10 @@ void main() {
 
     await tester.tap(find.text('取消全选'));
     await tester.pumpAndSettle();
+    // 取消是破坏性的（打卡时间会一起没），所以先弹确认
+    expect(find.text('取消全部打卡？'), findsOneWidget);
+    await tester.tap(find.text('取消全部打卡'));
+    await tester.pumpAndSettle();
     expect(find.text('已完成 0 / 2 台器械'), findsOneWidget);
   });
 
@@ -369,5 +373,109 @@ void main() {
     await goToTab(tester, '历史记录');
     expect(find.text('完成 2/2 台器械 · 约 52 分钟'), findsOneWidget);
     expect(find.text('累计训练 52 分钟'), findsOneWidget);
+  });
+
+  testWidgets('取消全选要先确认，点「再想想」什么都没变', (WidgetTester tester) async {
+    usePhoneSize(tester);
+    final store = await buildStore();
+    await tester.pumpWidget(MuscleApp(store: store));
+    await tester.pumpAndSettle();
+
+    await addEquipment(tester, '腿举机');
+    await tester.tap(find.text('腿举机'));
+    await tester.pumpAndSettle();
+    expect(find.text('已完成 1 / 1 台器械'), findsOneWidget);
+
+    await tester.tap(find.text('取消全选'));
+    await tester.pumpAndSettle();
+    expect(find.text('取消全部打卡？'), findsOneWidget);
+
+    await tester.tap(find.text('再想想'));
+    await tester.pumpAndSettle();
+    expect(find.text('取消全部打卡？'), findsNothing);
+    expect(find.text('已完成 1 / 1 台器械'), findsOneWidget);
+    expect(store.completedItemCount, 1);
+    // 打卡时间也还在，训练时长不受影响
+    expect(store.sessionFor(today()).items.single.completedAt, isNotNull);
+  });
+
+  testWidgets('确认之后才会真的取消全部打卡', (WidgetTester tester) async {
+    usePhoneSize(tester);
+    final store = await buildStore();
+    await tester.pumpWidget(MuscleApp(store: store));
+    await tester.pumpAndSettle();
+
+    await addEquipment(tester, '腿举机');
+    await tester.tap(find.text('腿举机'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('取消全选'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消全部打卡'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已完成 0 / 1 台器械'), findsOneWidget);
+    expect(store.completedItemCount, 0);
+    expect(store.sessionFor(today()).items.single.completedAt, isNull);
+  });
+
+  testWidgets('「全部完成」是补齐，不弹确认', (WidgetTester tester) async {
+    usePhoneSize(tester);
+    final store = await buildStore();
+    await tester.pumpWidget(MuscleApp(store: store));
+    await tester.pumpAndSettle();
+
+    await addEquipment(tester, '腿举机');
+    await tester.tap(find.text('全部完成'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('取消全部打卡？'), findsNothing);
+    expect(find.text('已完成 1 / 1 台器械'), findsOneWidget);
+    expect(store.completedItemCount, 1);
+  });
+
+  testWidgets('清单上能随手记当天的重量，且不会改到周计划', (WidgetTester tester) async {
+    usePhoneSize(tester);
+    final store = await buildStore();
+    final weekday = DateTime.now().weekday;
+    await store.addPlanItem(
+      weekday,
+      const ExerciseItem(id: 'p1', name: '腿举机', sets: 3, reps: 12),
+    );
+
+    await tester.pumpWidget(MuscleApp(store: store));
+    await tester.pumpAndSettle();
+
+    // 周计划里没设重量，清单上只有一个「重量」入口
+    expect(find.text('腿举机'), findsOneWidget);
+    expect(find.text('3 组 × 12 次'), findsOneWidget);
+    expect(find.text('重量'), findsOneWidget);
+
+    await tester.tap(find.text('重量'));
+    await tester.pumpAndSettle();
+    expect(find.text('「腿举机」的重量'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextFormField), '60');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('60 kg'), findsOneWidget);
+    // 摘要不再重复重量 —— 重量交给标签显示
+    expect(find.text('3 组 × 12 次'), findsOneWidget);
+    expect(find.text('3 组 × 12 次 · 60 kg'), findsNothing);
+    // 记在当天，周计划那一份还是空的
+    expect(store.sessionFor(today()).items.single.weight, 60);
+    expect(store.planFor(weekday).single.weight, isNull);
+
+    // 再点开留空保存 = 清掉重量
+    await tester.tap(find.text('60 kg'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), '');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('60 kg'), findsNothing);
+    expect(find.text('3 组 × 12 次'), findsOneWidget);
+    expect(store.sessionFor(today()).items.single.weight, isNull);
   });
 }

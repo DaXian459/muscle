@@ -35,6 +35,15 @@ class SessionItem {
   double? get weight => item.weight;
   String get note => item.note;
   String get summary => item.summary;
+  String get setsAndReps => item.setsAndReps;
+
+  /// 「高位下拉 20kg」，历史卡片上的小标签用它，好让重量一眼可见。
+  String get nameWithWeight {
+    final load = weight;
+    return load != null && load > 0
+        ? '$name ${formatWeight(load)}kg'
+        : name;
+  }
 
   SessionItem copyWith({
     ExerciseItem? item,

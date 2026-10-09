@@ -7,6 +7,7 @@ import '../utils/dates.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/exercise_editor_sheet.dart';
 import '../widgets/exercise_tile.dart';
+import '../widgets/weight_editor.dart';
 
 /// 某一天的训练详情：既能回看，也能补打卡或修正记录。
 class SessionDetailPage extends StatelessWidget {
@@ -34,6 +35,22 @@ class SessionDetailPage extends StatelessWidget {
     } else if (result.item != null) {
       await store.updateSessionItem(date, result.item!);
     }
+  }
+
+  Future<void> _editWeight(BuildContext context, SessionItem entry) async {
+    final store = context.read<AppStore>();
+    final text = await showWeightEditor(
+      context,
+      name: entry.name,
+      weight: entry.weight,
+    );
+    if (text == null) return;
+
+    final value = parseWeightInput(text);
+    await store.updateSessionItem(
+      date,
+      entry.item.copyWith(weight: value, clearWeight: value == null),
+    );
   }
 
   Future<void> _deleteRecord(BuildContext context) async {
@@ -148,6 +165,7 @@ class SessionDetailPage extends StatelessWidget {
                 onToggle: () => store.toggleItem(date, entry.id),
                 onEdit: () => _editItem(context, entry),
                 onDelete: () => store.removeSessionItem(date, entry.id),
+                onWeightTap: () => _editWeight(context, entry),
               ),
         ],
       ),
