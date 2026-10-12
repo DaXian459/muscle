@@ -113,21 +113,20 @@ void main() {
   testWidgets('翻到过去的日期不会套用周计划，但可以按计划补记', (WidgetTester tester) async {
     usePhoneSize(tester);
     final store = await buildStore();
+    final yesterday = addDays(today(), -1);
+
+    // 直接给「昨天」那个星期几安排一台器械。
+    // 不走周计划页的界面：星期条要横向滚动才够得着周六周日，
+    // 那样这条用例就成了挑日期才能过的。
+    await store.addPlanItem(
+      yesterday.weekday,
+      const ExerciseItem(id: 'p1', name: '腿举机', sets: 3, reps: 12),
+    );
+
     await tester.pumpWidget(MuscleApp(store: store));
     await tester.pumpAndSettle();
 
-    final yesterday = addDays(today(), -1);
-    final yesterdayWeekday = weekdayName(yesterday.weekday);
-
-    // 给「昨天」那个星期几安排一台器械。
-    await goToTab(tester, '周计划');
-    await tester.tap(find.text(yesterdayWeekday));
-    await tester.pumpAndSettle();
-    await addEquipment(tester, '腿举机');
-    expect(store.planFor(yesterday.weekday), hasLength(1));
-
-    // 翻回昨天：不会自动冒出周计划里的器械。
-    await goToTab(tester, '今日训练');
+    // 翻到昨天：不会自动冒出周计划里的器械。
     await tester.tap(find.byIcon(Icons.chevron_left));
     await tester.pumpAndSettle();
     expect(find.text('这一天没有训练记录'), findsOneWidget);
@@ -432,6 +431,75 @@ void main() {
     expect(find.text('取消全部打卡？'), findsNothing);
     expect(find.text('已完成 1 / 1 台器械'), findsOneWidget);
     expect(store.completedItemCount, 1);
+  });
+
+  testWidgets('开始训练 → 暂停 → 继续 → 结束的完整流程', (WidgetTester tester) async {
+    usePhoneSize(tester);
+    debugNowOverride = DateTime(2026, 10, 7, 18, 0);
+    addTearDown(() => debugNowOverride = null);
+
+    final store = await buildStore();
+    await store.addPlanItem(
+      today().weekday,
+      const ExerciseItem(id: 'p1', name: '腿举机', sets: 3, reps: 12),
+    );
+
+    await tester.pumpWidget(MuscleApp(store: store));
+    await tester.pumpAndSettle();
+    expect(find.text('还没开始计时'), findsOneWidget);
+    expect(find.text('开始训练'), findsOneWidget);
+
+    // 计时器跑起来之后就不能用 pumpAndSettle 了（永远等不到没有待处理帧）
+    await tester.tap(find.text('开始训练'));
+    await tester.pump();
+    expect(find.text('训练中 00:00'), findsOneWidget);
+    expect(find.text('暂停'), findsOneWidget);
+
+    // 练了 12 分钟
+    debugNowOverride = DateTime(2026, 10, 7, 18, 12);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('训练中 12:00'), findsOneWidget);
+
+    // 暂停
+    await tester.tap(find.text('暂停'));
+    await tester.pump();
+    expect(find.text('已暂停 12:00'), findsOneWidget);
+    expect(find.text('继续'), findsOneWidget);
+
+    // 暂停期间时间照走，但不计入
+    debugNowOverride = DateTime(2026, 10, 7, 18, 30);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('已暂停 12:00'), findsOneWidget);
+
+    // 继续，再练 30 分钟
+    await tester.tap(find.text('继续'));
+    await tester.pump();
+    debugNowOverride = DateTime(2026, 10, 7, 19, 0);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('训练中 42:00'), findsOneWidget);
+
+    // 结束
+    await tester.tap(find.text('结束'));
+    await tester.pump();
+    expect(find.text('用时 42 分钟'), findsOneWidget);
+    expect(find.text('重新计时'), findsOneWidget);
+
+    // 历史卡片上写「用时」而不是「约」—— 这是真的计时，不是推算
+    await goToTab(tester, '历史记录');
+    expect(find.text('完成 0/1 台器械 · 用时 42 分钟'), findsOneWidget);
+  });
+
+  testWidgets('过去的日期不给计时按钮', (WidgetTester tester) async {
+    usePhoneSize(tester);
+    final store = await buildStore();
+    await tester.pumpWidget(MuscleApp(store: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.chevron_left));
+    await tester.pumpAndSettle();
+
+    expect(find.text('还没开始计时'), findsOneWidget);
+    expect(find.text('开始训练'), findsNothing);
   });
 
   testWidgets('清单上能随手记当天的重量，且不会改到周计划', (WidgetTester tester) async {

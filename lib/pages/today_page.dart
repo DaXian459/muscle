@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -26,6 +28,12 @@ class _TodayPageState extends State<TodayPage> with WidgetsBindingObserver {
   /// 正在看的那一天，不能把他眼前的记录顶掉。
   bool _pinnedToToday = true;
 
+  /// 计时中用来每秒刷新一次。
+  ///
+  /// 不跑的时候必须是 null：一个常驻的周期定时器会让 Widget 测试里的
+  /// pumpAndSettle 永远等不到「没有待处理帧」，而且白耗电。
+  Timer? _ticker;
+
   bool get _isToday => isSameDay(_date, today());
 
   /// 过去的日期不套用周计划，只有真正记录过才有清单。
@@ -39,6 +47,7 @@ class _TodayPageState extends State<TodayPage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _ticker?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -185,6 +194,9 @@ class _TodayPageState extends State<TodayPage> with WidgetsBindingObserver {
     final session = store.sessionFor(_date);
     final plannedToday = store.planFor(_date.weekday);
 
+    // 计时中才需要每秒刷新一次
+    _syncTicker(session.isRunning && _isToday);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('今日训练'),
@@ -323,6 +335,121 @@ class _TodayPageState extends State<TodayPage> with WidgetsBindingObserver {
     );
   }
 
+  /// 计时中才需要每秒刷新；暂停、结束、翻到别的日期都要停掉。
+  void _syncTicker(bool shouldRun) {
+    if (shouldRun && _ticker == null) {
+      _ticker = Timer.periodic(
+        const Duration(seconds: 1),
+        (_) {
+          if (mounted) setState(() {});
+        },
+      );
+    } else if (!shouldRun && _ticker != null) {
+      _ticker!.cancel();
+      _ticker = null;
+    }
+  }
+
+  /// 进度卡片底下那行：时长 + 计时按钮。
+  Widget _timerRow(ThemeData theme, AppStore store, SessionRecord session) {
+    final scheme = theme.colorScheme;
+    // 只有今天、且确实在跑，才把「正在跑的这段」算进去。
+    // 别的日期上还在跑多半是忘了关，那种只能算已累计的部分。
+    final live = session.isRunning && _isToday;
+    final span = session.duration(now: live ? currentTime() : null);
+
+    final IconData icon;
+    final String label;
+    if (session.isRunning && _isToday) {
+      icon = Icons.timer_outlined;
+      label = '训练中 ${formatTimer(span ?? Duration.zero)}';
+    } else if (session.isPaused && _isToday) {
+      icon = Icons.pause_circle_outline;
+      label = '已暂停 ${formatTimer(span ?? Duration.zero)}';
+    } else if (session.isFinished) {
+      icon = Icons.check_circle_outline;
+      label = '用时 ${formatDuration(span ?? Duration.zero)}';
+    } else if (span != null) {
+      icon = Icons.schedule;
+      label = '本次训练 约 ${formatDuration(span)}';
+    } else {
+      icon = Icons.timer_outlined;
+      label = '还没开始计时';
+    }
+
+    return Row(
+      children: <Widget>[
+        Icon(icon, size: 14, color: scheme.onSurfaceVariant),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            label,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ),
+        ..._timerButtons(store, session),
+      ],
+    );
+  }
+
+  List<Widget> _timerButtons(AppStore store, SessionRecord session) {
+    // 过去的日期上不给按钮：那时候的训练早就结束了，
+    // 现在按「开始」只会记出一个荒唐的时长。
+    if (!_isToday) return const <Widget>[];
+
+    final ButtonStyle style = TextButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      minimumSize: const Size(0, 34),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+
+    if (session.isRunning) {
+      return <Widget>[
+        TextButton(
+          style: style,
+          onPressed: () => store.pauseTraining(_date),
+          child: const Text('暂停'),
+        ),
+        TextButton(
+          style: style,
+          onPressed: () => store.finishTraining(_date),
+          child: const Text('结束'),
+        ),
+      ];
+    }
+    if (session.isPaused) {
+      return <Widget>[
+        TextButton(
+          style: style,
+          onPressed: () => store.resumeTraining(_date),
+          child: const Text('继续'),
+        ),
+        TextButton(
+          style: style,
+          onPressed: () => store.finishTraining(_date),
+          child: const Text('结束'),
+        ),
+      ];
+    }
+    if (session.isFinished) {
+      return <Widget>[
+        TextButton(
+          style: style,
+          onPressed: () => store.startTraining(_date),
+          child: const Text('重新计时'),
+        ),
+      ];
+    }
+    return <Widget>[
+      TextButton(
+        style: style,
+        onPressed: () => store.startTraining(_date),
+        child: const Text('开始训练'),
+      ),
+    ];
+  }
+
   Widget _progressCard(ThemeData theme, AppStore store, SessionRecord session) {
     final scheme = theme.colorScheme;
     final total = session.total;
@@ -361,24 +488,8 @@ class _TodayPageState extends State<TodayPage> with WidgetsBindingObserver {
                 backgroundColor: scheme.surface.withValues(alpha: 0.7),
               ),
             ),
-            if (session.duration != null) ...<Widget>[
-              const SizedBox(height: 10),
-              Row(
-                children: <Widget>[
-                  Icon(
-                    Icons.schedule,
-                    size: 14,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '本次训练 约 ${formatDuration(session.duration!)}',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: scheme.onSurfaceVariant),
-                  ),
-                ],
-              ),
-            ],
+            const SizedBox(height: 10),
+            _timerRow(theme, store, session),
             if (total > 0) ...<Widget>[
               const SizedBox(height: 8),
               Row(

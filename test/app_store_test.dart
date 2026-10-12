@@ -416,7 +416,7 @@ void main() {
     );
     await store.toggleItem(kWednesday, 'a');
     // 只有一个打卡点，算不出时长
-    expect(store.sessionFor(kWednesday).duration, isNull);
+    expect(store.sessionFor(kWednesday).duration(), isNull);
 
     debugNowOverride = DateTime(2026, 10, 7, 19, 22);
     await store.addSessionItem(
@@ -425,7 +425,7 @@ void main() {
     );
     await store.toggleItem(kWednesday, 'b');
 
-    expect(store.sessionFor(kWednesday).duration, const Duration(minutes: 52));
+    expect(store.sessionFor(kWednesday).duration(), const Duration(minutes: 52));
     expect(store.totalDuration, const Duration(minutes: 52));
 
     // 另一天再练一次，累计时长叠加
@@ -443,7 +443,36 @@ void main() {
     );
     await store.toggleItem(nextDay, 'd');
 
-    expect(store.sessionFor(nextDay).duration, const Duration(minutes: 30));
+    expect(store.sessionFor(nextDay).duration(), const Duration(minutes: 30));
     expect(store.totalDuration, const Duration(minutes: 82));
+  });
+
+  test('计时状态会写进本地，重开应用后还在跑', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final prefs = await SharedPreferences.getInstance();
+    final store = AppStore(AppRepository(prefs));
+
+    debugNowOverride = DateTime(2026, 10, 7, 18, 0);
+    await store.addSessionItem(
+      kWednesday,
+      const ExerciseItem(id: 'a', name: 'A'),
+    );
+    await store.startTraining(kWednesday);
+    expect(store.sessionFor(kWednesday).isRunning, isTrue);
+
+    // 锁屏、切后台、甚至被系统杀掉再回来，计时都该还在
+    final reopened = AppStore(AppRepository(prefs));
+    final record = reopened.sessionFor(kWednesday);
+    expect(record.isRunning, isTrue);
+    expect(record.startedTime, DateTime(2026, 10, 7, 18, 0));
+
+    // 20 分钟后结束，时长按真实跨度算
+    debugNowOverride = DateTime(2026, 10, 7, 18, 20);
+    await reopened.finishTraining(kWednesday);
+    expect(reopened.sessionFor(kWednesday).isFinished, isTrue);
+    expect(
+      reopened.sessionFor(kWednesday).duration(),
+      const Duration(minutes: 20),
+    );
   });
 }

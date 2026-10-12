@@ -53,6 +53,33 @@ class SessionDetailPage extends StatelessWidget {
     );
   }
 
+  /// 头部那行时长。
+  ///
+  /// 手动计时过就写「18:30 – 19:22 · 用时 52 分钟」；没有就退回打卡首尾推算，
+  /// 并标「约」—— 两种来源的可信度不一样，不该混着说。
+  List<Widget> _durationLines(ThemeData theme, SessionRecord record) {
+    final span = record.duration();
+    if (span == null) return const <Widget>[];
+
+    final start = record.hasTimer ? record.startedTime : record.firstTickAt;
+    final end = record.hasTimer ? record.finishedTime : record.lastTickAt;
+    final value = record.hasTimer
+        ? '用时 ${formatDuration(span)}'
+        : '约 ${formatDuration(span)}';
+    final text = (start != null && end != null)
+        ? '${formatClock(start)} – ${formatClock(end)} · $value'
+        : value;
+
+    return <Widget>[
+      const SizedBox(height: 10),
+      Text(
+        text,
+        style: theme.textTheme.bodySmall
+            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
+    ];
+  }
+
   Future<void> _deleteRecord(BuildContext context) async {
     final store = context.read<AppStore>();
     final navigator = Navigator.of(context);
@@ -128,16 +155,7 @@ class SessionDetailPage extends StatelessWidget {
                       backgroundColor: scheme.surface.withValues(alpha: 0.7),
                     ),
                   ),
-                  if (record.duration != null) ...<Widget>[
-                    const SizedBox(height: 10),
-                    Text(
-                      '${formatClock(record.startedAt!)} – '
-                      '${formatClock(record.finishedAt!)} · '
-                      '约 ${formatDuration(record.duration!)}',
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: scheme.onSurfaceVariant),
-                    ),
-                  ],
+                  ..._durationLines(theme, record),
                 ],
               ),
             ),

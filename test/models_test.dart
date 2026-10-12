@@ -178,11 +178,11 @@ void main() {
         );
 
     test('打卡不足两次时算不出时长', () {
-      expect(recordWith(<String?>[]).duration, isNull);
-      expect(recordWith(<String?>[null, null]).duration, isNull);
+      expect(recordWith(<String?>[]).duration(), isNull);
+      expect(recordWith(<String?>[null, null]).duration(), isNull);
       // 只打了一次卡：一个点算不出跨度，不显示「用时 0 分钟」误导人
-      expect(recordWith(<String?>['2026-10-07T18:30:00']).duration, isNull);
-      expect(recordWith(<String?>['2026-10-07T18:30:00']).startedAt,
+      expect(recordWith(<String?>['2026-10-07T18:30:00']).duration(), isNull);
+      expect(recordWith(<String?>['2026-10-07T18:30:00']).firstTickAt,
           DateTime(2026, 10, 7, 18, 30));
     });
 
@@ -192,18 +192,19 @@ void main() {
         '2026-10-07T18:30:00',
         '2026-10-07T18:55:00',
       ]);
-      expect(record.duration, const Duration(minutes: 52));
-      expect(record.startedAt, DateTime(2026, 10, 7, 18, 30));
-      expect(record.finishedAt, DateTime(2026, 10, 7, 19, 22));
+      expect(record.duration(), const Duration(minutes: 52));
+      expect(record.firstTickAt, DateTime(2026, 10, 7, 18, 30));
+      expect(record.lastTickAt, DateTime(2026, 10, 7, 19, 22));
     });
 
     test('时间戳有问题时当作算不出来，而不是给出负数或 0', () {
       expect(
-        recordWith(<String?>['2026-10-07T18:30:00', '2026-10-07T18:30:00']).duration,
+        recordWith(<String?>['2026-10-07T18:30:00', '2026-10-07T18:30:00'])
+            .duration(),
         isNull,
       );
       expect(
-        recordWith(<String?>['2026-10-07T19:00:00', '不是时间']).duration,
+        recordWith(<String?>['2026-10-07T19:00:00', '不是时间']).duration(),
         isNull,
       );
     });
@@ -218,6 +219,113 @@ void main() {
         '1 小时 12 分钟',
       );
       expect(formatDuration(const Duration(hours: 2, minutes: 5)), '2 小时 5 分钟');
+    });
+
+    test('计时器走秒的格式', () {
+      expect(formatTimer(const Duration(seconds: 9)), '00:09');
+      expect(formatTimer(const Duration(minutes: 12, seconds: 34)), '12:34');
+      expect(formatTimer(const Duration(hours: 1, minutes: 2, seconds: 3)),
+          '1:02:03');
+      // 负数不该出现，真出现也要显示成 0 而不是 -1:-1
+      expect(formatTimer(const Duration(seconds: -5)), '00:00');
+    });
+  });
+
+  group('手动计时', () {
+    SessionRecord timed({
+      String? startedAt,
+      int elapsedSeconds = 0,
+      String? runningSince,
+      String? finishedAt,
+    }) =>
+        SessionRecord(
+          date: '2026-10-07',
+          items: const <SessionItem>[],
+          startedAt: startedAt,
+          elapsedSeconds: elapsedSeconds,
+          runningSince: runningSince,
+          finishedAt: finishedAt,
+        );
+
+    test('没开过计时器就不算数，改用打卡推算', () {
+      final record = timed();
+      expect(record.hasTimer, isFalse);
+      expect(record.isRunning, isFalse);
+      expect(record.duration(), isNull);
+    });
+
+    test('跑着的时候，传了 now 才算上当前这一段', () {
+      final record = timed(
+        startedAt: '2026-10-07T18:30:00',
+        elapsedSeconds: 600,
+        runningSince: '2026-10-07T19:00:00',
+      );
+      expect(record.isRunning, isTrue);
+      expect(
+        record.duration(now: DateTime(2026, 10, 7, 19, 5)),
+        const Duration(minutes: 15),
+      );
+      // 不传 now（比如看的是历史）就只算已累计的那部分
+      expect(record.duration(), const Duration(minutes: 10));
+    });
+
+    test('忘了关的计时器不会累出好几天', () {
+      // 三天前开始、一直没停
+      final record = timed(
+        startedAt: '2026-10-04T18:00:00',
+        runningSince: '2026-10-04T18:00:00',
+      );
+      // 看历史时不传 now，就不会把跑着的这三天算进去
+      expect(record.duration(), Duration.zero);
+    });
+
+    test('暂停后再继续，累计时长不会丢', () {
+      final paused = timed(
+        startedAt: '2026-10-07T18:00:00',
+        elapsedSeconds: 1800,
+      );
+      expect(paused.isPaused, isTrue);
+      expect(paused.duration(), const Duration(minutes: 30));
+
+      final resumed = paused.copyWith(runningSince: '2026-10-07T19:00:00');
+      expect(resumed.isRunning, isTrue);
+      expect(
+        resumed.duration(now: DateTime(2026, 10, 7, 19, 10)),
+        const Duration(minutes: 40),
+      );
+    });
+
+    test('结束之后以计时为准，不再看打卡', () {
+      final record = timed(
+        startedAt: '2026-10-07T18:00:00',
+        elapsedSeconds: 2700,
+        finishedAt: '2026-10-07T18:45:00',
+      );
+      expect(record.isFinished, isTrue);
+      expect(record.isRunning, isFalse);
+      expect(record.duration(), const Duration(minutes: 45));
+    });
+
+    test('计时相关的字段能存能读，旧数据没有这些字段也能读', () {
+      final record = timed(
+        startedAt: '2026-10-07T18:00:00',
+        elapsedSeconds: 123,
+        runningSince: '2026-10-07T18:30:00',
+      );
+      final restored = SessionRecord.fromJson(record.toJson());
+      expect(restored.startedAt, '2026-10-07T18:00:00');
+      expect(restored.elapsedSeconds, 123);
+      expect(restored.runningSince, '2026-10-07T18:30:00');
+      expect(restored.isRunning, isTrue);
+
+      // 老版本存下来的记录里没有这些键
+      final legacy = SessionRecord.fromJson(<String, dynamic>{
+        'date': '2026-10-07',
+        'items': <dynamic>[],
+      });
+      expect(legacy.hasTimer, isFalse);
+      expect(legacy.elapsedSeconds, 0);
+      expect(legacy.isRunning, isFalse);
     });
   });
 }

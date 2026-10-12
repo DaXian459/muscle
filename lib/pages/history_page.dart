@@ -200,6 +200,7 @@ class _HistoryPageState extends State<HistoryPage> {
 
   Widget _recordCard(ThemeData theme, SessionRecord record, DateTime date) {
     final scheme = theme.colorScheme;
+    final span = record.duration();
     final completedLabels = record.items
         .where((entry) => entry.completed)
         .map((entry) => entry.nameWithWeight)
@@ -249,8 +250,12 @@ class _HistoryPageState extends State<HistoryPage> {
               Text(
                 <String>[
                   '完成 ${record.completedCount}/${record.total} 台器械',
-                  if (record.duration != null)
-                    '约 ${formatDuration(record.duration!)}',
+                  // 手动计过时用「用时」，推算出来的标「约」——
+                  // 两者可信度不一样，界面上不该混为一谈
+                  if (span != null)
+                    record.hasTimer
+                        ? '用时 ${formatDuration(span)}'
+                        : '约 ${formatDuration(span)}',
                 ].join(' · '),
                 style: theme.textTheme.bodyMedium,
               ),

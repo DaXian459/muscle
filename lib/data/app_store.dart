@@ -233,6 +233,66 @@ class AppStore extends ChangeNotifier {
     return _saveSession(record.copyWith(items: items));
   }
 
+  // ---------------------------------------------------------------------------
+  // 训练计时
+  //
+  // 计时状态放在记录里而不是内存里：锁屏、切后台、甚至杀进程都不该把
+  // 正在进行的训练弄丢。
+  // ---------------------------------------------------------------------------
+
+  /// 开始计时。已经结束过再点，表示整段重来。
+  Future<void> startTraining(DateTime date) {
+    final record = sessionFor(date);
+    if (record.isRunning) return Future<void>.value();
+
+    final now = currentTime().toIso8601String();
+    final base = record.isFinished ? record.copyWith(clearTimer: true) : record;
+    return _saveSession(base.copyWith(startedAt: now, runningSince: now));
+  }
+
+  /// 暂停：把正在跑的这一段并进累计时长。
+  Future<void> pauseTraining(DateTime date) {
+    final record = sessionFor(date);
+    final since = record.runningSinceTime;
+    if (since == null) return Future<void>.value();
+
+    return _saveSession(record.copyWith(
+      elapsedSeconds:
+          record.elapsedSeconds + _secondsSince(since),
+      clearRunningSince: true,
+    ));
+  }
+
+  /// 继续计时。
+  Future<void> resumeTraining(DateTime date) {
+    final record = sessionFor(date);
+    if (!record.hasTimer || record.isRunning || record.isFinished) {
+      return Future<void>.value();
+    }
+    return _saveSession(
+      record.copyWith(runningSince: currentTime().toIso8601String()),
+    );
+  }
+
+  /// 结束：把当前段并进累计，记下结束时刻。
+  Future<void> finishTraining(DateTime date) {
+    final record = sessionFor(date);
+    if (record.isFinished) return Future<void>.value();
+
+    final since = record.runningSinceTime;
+    return _saveSession(record.copyWith(
+      elapsedSeconds: record.elapsedSeconds +
+          (since == null ? 0 : _secondsSince(since)),
+      clearRunningSince: true,
+      finishedAt: currentTime().toIso8601String(),
+    ));
+  }
+
+  int _secondsSince(DateTime since) {
+    final span = currentTime().difference(since);
+    return span.isNegative ? 0 : span.inSeconds;
+  }
+
   Future<void> addSessionItem(
     DateTime date,
     ExerciseItem item, {
@@ -324,7 +384,7 @@ class AppStore extends ChangeNotifier {
   Duration get totalDuration {
     var total = Duration.zero;
     for (final record in _sessions.values) {
-      final span = record.duration;
+      final span = record.duration();
       if (span != null) total += span;
     }
     return total;
